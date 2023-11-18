@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 from collections import namedtuple
-import numpy as np
 import time
 import sys
 
@@ -31,6 +30,10 @@ edgeHash = dict() # IATA code of origin airport -> dict that maps IATA code of t
 airportList = [] # list of Airport
 airportHash = dict() # hash key IATA code -> Airport
 
+def valid_iata_code(s):
+    return s.isalpha() and s.isupper() and len(s) == 3
+
+
 def readAirports(fd):
     print("Reading Airport file from {0}".format(fd))
     airportsTxt = open(fd, "r", encoding="utf8");
@@ -39,7 +42,7 @@ def readAirports(fd):
         a = Airport()
         try:
             temp = line.split(',')
-            if len(temp[4]) != 5:
+            if not valid_iata_code(temp[4][1:-1]):
                 raise Exception('not an IATA code')
             a.name=temp[1][1:-1] + ", " + temp[3][1:-1]
             a.code=temp[4][1:-1]
@@ -49,9 +52,9 @@ def readAirports(fd):
             pass
         else:
             cont += 1
+            # if cont > 30:
+            #     break
             airportList.append(a)
-            if a.code in airportHash:
-                print('OHNO', cont, a.code)
             airportHash[a.code] = a
     airportsTxt.close()
     print(f"There were {cont} Airports with IATA code")
@@ -107,18 +110,33 @@ def readRoutes(fd): # we are interested in fields 3 (3) origin and 5 (4) destina
     routesTxt.close()
 
 def computePageRanks():
+    # a_codes_list = [a.code for a in airportList.keys()]
+    PageRank = namedtuple("PageRank", [ap.code for ap in airportList])
+    sink_idx = [idx for idx, a in enumerate(airportList) if a.outweight == 0]
+    nonsink_idx = [idx for idx, a in enumerate(airportList) if a.outweight > 0]
     n = len(airportList)
-    p = {a_code: 1/n for a_code in airportHash.keys()}
-    print(sum(p.values()))
-    quit()
+    nonsink = [a for a in airportList if a.outweight > 0]
+    sink = [a for a in airportList if a.outweight == 0]
+    m = len(nonsink)
+    # p = {a_code: 1 for a_code in airportHash.keys()}
+    p = PageRank(*[1]*n)
     l_factor = 0.9
-    for i in range(100):
-        q = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor)/n for a in airportList}
+    for i in range(10):
+        sink_prob = sum([p[idx] for idx in sink_idx])
+        total_prob = sum(p)/n
+        q_list = [l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) if a.outweight==0 else
+             l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + sink_prob*l_factor/m
+             for a in airportList]
+        q = PageRank(*q_list)
+        # q_nonsink = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + sink_prob*l_factor/m for a in nonsink}
+        # q_sink = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) for a in sink}
+        # q = {**q_nonsink, **q_sink}
+        # q = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + l_factor*sink_prob/m for a in airportList}
+        print(i)
+        print(total_prob)
+        print(p)
         p = q
-        print(sum(p.values()))
     return p
-    
-
     
 
     pass
@@ -131,11 +149,15 @@ def main(argv=None):
     readAirports("airports.txt")
     readRoutes("routes.txt")
     # for a in airportList:
+    #     print(a.outweight)
     #     ow1 = sum([e.weight for e in a.routes])
     #     ow2 = a.outweight
     #     if ow1 != ow2:
     #         print(ow1, ow2)
-    # quit()
+    # print(max([a.outweight for a in airportList]))
+    # print([a.code for a in airportList if a.code in edgeHash and a.outweight!=sum([e.weight for d,e in edgeHash[a.code].items()]) or 
+    #                                       a.code not in edgeHash and a.outweight!=0])
+    
     time1 = time.time()
     iterations = computePageRanks()
     time2 = time.time()

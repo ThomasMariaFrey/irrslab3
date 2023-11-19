@@ -110,11 +110,11 @@ def readRoutes(fd): # we are interested in fields 3 (3) origin and 5 (4) destina
     routesTxt.close()
 
 def computePageRanks():
+    n = len(airportList)
     # a_codes_list = [a.code for a in airportList.keys()]
-    PageRank = namedtuple("PageRank", [ap.code for ap in airportList])
+    PageRank = namedtuple("PageRank", [ap.code for ap in airportList], defaults=[0]*n)
     sink_idx = [idx for idx, a in enumerate(airportList) if a.outweight == 0]
     nonsink_idx = [idx for idx, a in enumerate(airportList) if a.outweight > 0]
-    n = len(airportList)
     nonsink = [a for a in airportList if a.outweight > 0]
     sink = [a for a in airportList if a.outweight == 0]
     m = len(nonsink)
@@ -124,9 +124,12 @@ def computePageRanks():
     for i in range(10):
         sink_prob = sum([p[idx] for idx in sink_idx])
         total_prob = sum(p)/n
+        p_mod_dict = {a.code: getattr(p,a.code) + sink_prob/m for a in nonsink}
+        p_mod = PageRank(**p_mod_dict)
         q_list = [l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) if a.outweight==0 else
              l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + sink_prob*l_factor/m
              for a in airportList]
+        # q_list = [l_factor*sum([getattr(p_mod,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) for a in airportList]
         q = PageRank(*q_list)
         # q_nonsink = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + sink_prob*l_factor/m for a in nonsink}
         # q_sink = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) for a in sink}

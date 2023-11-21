@@ -11,8 +11,7 @@ class Edge:
 
     def __repr__(self):
         return "edge: {0} {1}".format(self.origin, self.weight)
-        
-    ## write rest of code that you need for this class
+
 
 class Airport:
     def __init__ (self, iden=None, name=None):
@@ -23,7 +22,7 @@ class Airport:
         self.outweight = 0
 
     def __repr__(self):
-        return f"{self.code}\t{self.pageIndex}\t{self.name}"
+        return f"{self.code}\t{self.name}"
 
 edgeList = [] # list of Edge, not used for Pagerank
 edgeHash = dict() # IATA code of origin airport -> dict that maps IATA code of the dest -> Edge from origin to dest
@@ -52,8 +51,6 @@ def readAirports(fd):
             pass
         else:
             cont += 1
-            # if cont > 30:
-            #     break
             airportList.append(a)
             airportHash[a.code] = a
     airportsTxt.close()
@@ -88,7 +85,7 @@ def add_edge(origin_code, destination_code):
 
 
 
-def readRoutes(fd): # we are interested in fields 3 (3) origin and 5 (4) destination
+def readRoutes(fd):
     print("Reading Routes file from {fd}")
     routesTxt = open(fd, "r", encoding="utf8");
     cont = 0
@@ -109,44 +106,62 @@ def readRoutes(fd): # we are interested in fields 3 (3) origin and 5 (4) destina
             add_edge(origin, destination)
     routesTxt.close()
 
+EPSILON = 0.001
+def stopping_criteria(p,q, it):
+    if it > 500:
+        return True
+    if q is None:
+        return False
+    print(p)
+    print(q)
+    for a in airportList:
+        pa, qa = getattr(p,a.code),getattr(q,a.code)
+        d = abs(pa-qa)/qa
+        if d > EPSILON:
+            return False
+    return True
+
+
+
+
+
 def computePageRanks():
     n = len(airportList)
     # a_codes_list = [a.code for a in airportList.keys()]
     PageRank = namedtuple("PageRank", [ap.code for ap in airportList], defaults=[0]*n)
     sink_idx = [idx for idx, a in enumerate(airportList) if a.outweight == 0]
-    nonsink_idx = [idx for idx, a in enumerate(airportList) if a.outweight > 0]
+    # nonsink_idx = [idx for idx, a in enumerate(airportList) if a.outweight > 0]
     nonsink = [a for a in airportList if a.outweight > 0]
-    sink = [a for a in airportList if a.outweight == 0]
+    # sink = [a for a in airportList if a.outweight == 0]
     m = len(nonsink)
     # p = {a_code: 1 for a_code in airportHash.keys()}
     p = PageRank(*[1]*n)
     l_factor = 0.9
-    for i in range(10):
+    q = None
+    it = 0
+    while not stopping_criteria(p,q, it):
+        if it > 0:
+            p = q
         sink_prob = sum([p[idx] for idx in sink_idx])
         total_prob = sum(p)/n
-        p_mod_dict = {a.code: getattr(p,a.code) + sink_prob/m for a in nonsink}
-        p_mod = PageRank(**p_mod_dict)
-        q_list = [l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) if a.outweight==0 else
-             l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + sink_prob*l_factor/m
-             for a in airportList]
-        # q_list = [l_factor*sum([getattr(p_mod,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) for a in airportList]
+        # q_list = [l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) if a.outweight==0 else
+        #      l_factor*sum([getattr(p,e.origin.code)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + sink_prob*l_factor/m
+        #      for a in airportList]
+        q_list = [l_factor*sum([(getattr(p,e.origin.code) + sink_prob/m)*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) for a in airportList]
         q = PageRank(*q_list)
         # q_nonsink = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + sink_prob*l_factor/m for a in nonsink}
         # q_sink = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) for a in sink}
         # q = {**q_nonsink, **q_sink}
         # q = {a.code: l_factor*sum([p[e.origin.code]*e.weight/e.origin.outweight for e in a.routes]) + (1-l_factor) + l_factor*sink_prob/m for a in airportList}
-        print(i)
-        print(total_prob)
+        it += 1
+        print('prob_sum',total_prob)
         print(p)
-        p = q
-    return p
-    
+    return p, it
 
-    pass
 
-def outputPageRanks():
-    # write your code
-    pass
+def outputPageRanks(p):
+    for a in airportList:
+        print(a.code+':', getattr(p,a.code))
 
 def main(argv=None):
     readAirports("airports.txt")
@@ -162,10 +177,9 @@ def main(argv=None):
     #                                       a.code not in edgeHash and a.outweight!=0])
     
     time1 = time.time()
-    iterations = computePageRanks()
+    pr, iterations = computePageRanks()
     time2 = time.time()
-    quit()
-    outputPageRanks()
+    outputPageRanks(pr)
     print("#Iterations:", iterations)
     print("Time of computePageRanks():", time2-time1)
 
